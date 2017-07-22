@@ -5,5 +5,5 @@ authors = ["softprops <d.tangren@gmail.com>"]
 
 [dependencies]
 glob = "0.2"
-regex = "*"
-lazy_static = "*"
+regex = "0.2"
+lazy_static = "0.2"
