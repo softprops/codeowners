@@ -11,12 +11,28 @@ use std::io::{BufRead, Read};
 use std::str::FromStr;
 
 use regex::Regex;
+use std::fmt;
 
+/// Various types of owners
 #[derive(Debug, PartialEq)]
 pub enum Owner {
+    /// Owner in the form @username
     Username(String),
+    /// Owner in the form @org/Team
     Team(String),
+    /// Owner in the form user@domain.com
     Email(String),
+}
+
+impl fmt::Display for Owner {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let inner = match self {
+            &Owner::Username(ref u) => u,
+            &Owner::Team(ref t) => t,
+            &Owner::Email(ref e) => e,
+        };
+        f.write_str(inner.as_str())
+    }
 }
 
 impl FromStr for Owner {
@@ -40,13 +56,15 @@ impl FromStr for Owner {
     }
 }
 
+/// Mappings of owners to path patterns
 #[derive(Debug, PartialEq)]
 pub struct Owners {
     paths: Vec<(Pattern, Vec<Owner>)>,
 }
 
 impl Owners {
-    pub fn owners<P>(&self, path: P) -> Option<&Vec<Owner>>
+    /// Resolve a list of owners matching a given path
+    pub fn of<P>(&self, path: P) -> Option<&Vec<Owner>>
     where
         P: AsRef<Path>,
     {
@@ -63,6 +81,7 @@ impl Owners {
             .next()
     }
 
+    /// Parse a CODEOWNERS file existing at a given path
     pub fn from_path<P>(path: P) -> Self
     where
         P: AsRef<Path>,
@@ -70,6 +89,7 @@ impl Owners {
         Self::from_reader(File::open(path).unwrap())
     }
 
+    /// Parse a CODEOWNERS file from some readable source
     pub fn from_reader<R>(read: R) -> Self
     where
         R: Read,
@@ -115,6 +135,21 @@ mod tests {
 # You can also use email addresses if you prefer.
 docs/*  docs@example.com
 ";
+
+    #[test]
+    fn owner_parses() {
+        assert!("@user".parse() == Ok(Owner::Username("@user".into())));
+        assert!("@org/team".parse() == Ok(Owner::Team("@org/team".into())));
+        assert!("user@domain.com".parse() == Ok(Owner::Email("user@domain.com".into())));
+    }
+
+    #[test]
+    fn owner_displays() {
+        assert!(Owner::Username("@user".into()).to_string() == "@user");
+        assert!(Owner::Team("@org/team".into()).to_string() == "@org/team");
+        assert!(Owner::Email("user@domain.com".into()).to_string() == "user@domain.com");
+    }
+
     #[test]
     fn from_reader_parses() {
         let owners = Owners::from_reader(EXAMPLE.as_bytes());
@@ -146,7 +181,7 @@ docs/*  docs@example.com
     fn owners_owns_wildcard() {
         let owners = Owners::from_reader(EXAMPLE.as_bytes());
         assert_eq!(
-            owners.owners("foo/bar.txt"),
+            owners.of("foo/bar.txt"),
             Some(&vec![Owner::Username("@defunkt".into())])
         )
     }
@@ -155,7 +190,7 @@ docs/*  docs@example.com
     fn owners_owns_last_match_wins() {
         let owners = Owners::from_reader(EXAMPLE.as_bytes());
         assert_eq!(
-            owners.owners("docs/foo.js"),
+            owners.of("docs/foo.js"),
             Some(&vec![Owner::Email("docs@example.com".into())])
         )
     }
