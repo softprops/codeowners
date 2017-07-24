@@ -1,5 +1,5 @@
 sudo: false
-
+dist: trusty
 language: rust
 
 matrix:
@@ -27,12 +27,11 @@ addons:
     - libcurl4-openssl-dev
     - libelf-dev
     - libdw-dev
-    - cmake
-    - gcc
-    - binutils-dev # required for `kcov --verify`
+    - binutils-dev
+    - libiberty-dev
 
 after_success:
-  - [ $TRAVIS_RUST_VERSION = stable ] &&
+  - '[ $TRAVIS_RUST_VERSION = stable ] &&
     [ $TRAVIS_BRANCH = master ] &&
     [ $TRAVIS_PULL_REQUEST = false ] &&
     (LOCAL="~/.local" && export PATH=$LOCAL/bin:$PATH &&
@@ -47,11 +46,14 @@ after_success:
          kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file";
        fi;
     done &&
-    kcov --coveralls-id=$TRAVIS_JOB_ID --merge target/cov target/cov/*' &&
-    echo "covered") || true &&
+    kcov --coveralls-id=$TRAVIS_JOB_ID --merge target/cov target/cov/* &&
+    echo "covered") || true'
+  - '[ $TRAVIS_RUST_VERSION = stable ] &&
+    [ $TRAVIS_BRANCH = master ] &&
+    [ $TRAVIS_PULL_REQUEST = false ] &&
     cargo doc --no-deps &&
-    echo "<meta http-equiv=refresh content=0;url=`echo $TRAVIS_REPO_SLUG | cut -d '/' -f 2`/index.html>" > target/doc/index.html &&
+    echo "<meta http-equiv=refresh content=0;url=`echo $TRAVIS_REPO_SLUG | cut -d / -f 2`/index.html>" > target/doc/index.html &&
     pip install --user ghp-import &&
     /home/travis/.local/bin/ghp-import -n target/doc &&
     git push -fq https://${GH_TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages &&
-    echo "documented"
+    echo "documented"'
