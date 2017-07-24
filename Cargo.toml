@@ -2,6 +2,13 @@
 name = "codeowners"
 version = "0.1.0"
 authors = ["softprops <d.tangren@gmail.com>"]
+description = "Rust bindings for Github CODEOWNERS files"
+readme = "README.md"
+homepage = "https://github.com/softprops/codeowners"
+documentation = "https://softprops.github.io/codeowners"
+repository = "https://github.com/softprops/codeowners"
+license = "MIT"
+keywords = ["github", "owners"]
 
 [dependencies]
 glob = "0.2"
