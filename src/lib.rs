@@ -183,7 +183,12 @@ where
                     }
                     result
                 });
-                paths.push((Pattern::new(path).unwrap(), owners))
+                let normalized = if path.starts_with("*") {
+                    path.to_owned()
+                } else {
+                    format!("**/{}", path)
+                };
+                paths.push((Pattern::new(&normalized).unwrap(), owners))
             }
             paths
         });
@@ -234,7 +239,7 @@ docs/*  docs@example.com
             Owners {
                 paths: vec![
                     (
-                        Pattern::new("docs/*").unwrap(),
+                        Pattern::new("**/docs/*").unwrap(),
                         vec![Owner::Email("docs@example.com".into())]
                     ),
                     (
@@ -267,6 +272,15 @@ docs/*  docs@example.com
         let owners = from_reader(EXAMPLE.as_bytes());
         assert_eq!(
             owners.of("docs/foo.js"),
+            Some(&vec![Owner::Email("docs@example.com".into())])
+        )
+    }
+
+    #[test]
+    fn base_is_implied() {
+        let owners = from_reader(EXAMPLE.as_bytes());
+        assert_eq!(
+            owners.of("foo/docs/foo.js"),
             Some(&vec![Owner::Email("docs@example.com".into())])
         )
     }
