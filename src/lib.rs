@@ -14,7 +14,7 @@
 //!      (env::args().nth(1), env::args().nth(2)) {
 //!      let owners = codeowners::from_path(owners_file);
 //!      match owners.of(&path) {
-//!        None => println!("{} needs adopted :/", path),
+//!        None => println!("{} is up for adoption", path),
 //!        Some(owners) => {
 //!           for owner in owners {
 //!             println!("{}", owner);
@@ -123,7 +123,22 @@ impl Owners {
     }
 }
 
-/// Attempts to locate CODEOWNERS file
+/// Attempts to locate CODEOWNERS file based on common locations relative to
+/// a given git repo
+///
+/// # Examples
+///
+/// ```rust
+///  match codeowners::locate(".") {
+///   Some(ownersfile)  => {
+///     println!(
+///      "{:#?}",
+///      codeowners::from_path(ownersfile)
+///    )
+///  },
+///   _ => println!("failed to find CODEOWNERS file")
+/// }
+/// ```
 pub fn locate<P>(ctx: P) -> Option<PathBuf>
 where
     P: AsRef<Path>,
@@ -201,6 +216,7 @@ docs/*  docs@example.com
         assert!("@user".parse() == Ok(Owner::Username("@user".into())));
         assert!("@org/team".parse() == Ok(Owner::Team("@org/team".into())));
         assert!("user@domain.com".parse() == Ok(Owner::Email("user@domain.com".into())));
+        assert!("bogus".parse::<Owner>() == Err("not an owner".into()));
     }
 
     #[test]
