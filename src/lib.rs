@@ -1,19 +1,60 @@
+//! Codeowners provides interfaces for resolving owners of paths within code repositories using
+//! Github [CODEOWNERS](https://help.github.com/articles/about-codeowners/) files
+//!
+//! # Examples
+//!
+//! Typical use involves resolving a CODEOWNERS file, parsing it, then querying target paths
+//!
+//! ```no_run
+//! extern crate codeowners;
+//! use std::env;
+//!
+//! fn main() {
+//!   if let (Some(owners_file), Some(path)) =
+//!      (env::args().nth(1), env::args().nth(2)) {
+//!      let owners = codeowners::from_path(owners_file);
+//!      match owners.of(&path) {
+//!        None => println!("{} needs adopted :/", path),
+//!        Some(owners) => {
+//!           for owner in owners {
+//!             println!("{}", owner);
+//!           }
+//!        }
+//!      }
+//!   }
+//! }
+//! ```
+#![allow(missing_docs)]
 
-extern crate regex;
 extern crate glob;
 #[macro_use]
 extern crate lazy_static;
+extern crate regex;
+
 use glob::Pattern;
-use std::path::Path;
+use regex::Regex;
+use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::{BufRead, Read};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use regex::Regex;
-use std::fmt;
+const CODEOWNERS: &str = "CODEOWNERS";
 
 /// Various types of owners
+///
+/// Owners supports parsing from strings as well as displaying as strings
+///
+/// # Examples
+///
+/// ```rust
+/// let raw = "@org/team";
+/// assert_eq!(
+///   raw.parse::<codeowners::Owner>().unwrap().to_string(),
+///   raw
+/// );
+/// ```
 #[derive(Debug, PartialEq)]
 pub enum Owner {
     /// Owner in the form @username
@@ -80,41 +121,60 @@ impl Owners {
             })
             .next()
     }
+}
 
-    /// Parse a CODEOWNERS file existing at a given path
-    pub fn from_path<P>(path: P) -> Self
-    where
-        P: AsRef<Path>,
-    {
-        Self::from_reader(File::open(path).unwrap())
+/// Attempts to locate CODEOWNERS file
+pub fn locate<P>(ctx: P) -> Option<PathBuf>
+where
+    P: AsRef<Path>,
+{
+    let root = ctx.as_ref().join(CODEOWNERS);
+    let github = ctx.as_ref().join(".github").join(CODEOWNERS);
+    let docs = ctx.as_ref().join("docs").join(CODEOWNERS);
+    if root.exists() {
+        Some(root)
+    } else if github.exists() {
+        Some(github)
+    } else if docs.exists() {
+        Some(docs)
+    } else {
+        None
     }
+}
 
-    /// Parse a CODEOWNERS file from some readable source
-    pub fn from_reader<R>(read: R) -> Self
-    where
-        R: Read,
-    {
-        let mut paths = BufReader::new(read)
-            .lines()
-            .filter_map(Result::ok)
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            .fold(Vec::new(), |mut paths, line| {
-                let mut elements = line.split_whitespace();
-                if let Some(path) = elements.next() {
-                    let owners = elements.fold(Vec::new(), |mut result, owner| {
-                        if let Ok(owner) = owner.parse() {
-                            result.push(owner)
-                        }
-                        result
-                    });
-                    paths.push((Pattern::new(path).unwrap(), owners))
-                }
-                paths
-            });
-        // last match takes precedence
-        paths.reverse();
-        Owners { paths: paths }
-    }
+/// Parse a CODEOWNERS file existing at a given path
+pub fn from_path<P>(path: P) -> Owners
+where
+    P: AsRef<Path>,
+{
+    ::from_reader(File::open(path).unwrap())
+}
+
+/// Parse a CODEOWNERS file from some readable source
+pub fn from_reader<R>(read: R) -> Owners
+where
+    R: Read,
+{
+    let mut paths = BufReader::new(read)
+        .lines()
+        .filter_map(Result::ok)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .fold(Vec::new(), |mut paths, line| {
+            let mut elements = line.split_whitespace();
+            if let Some(path) = elements.next() {
+                let owners = elements.fold(Vec::new(), |mut result, owner| {
+                    if let Ok(owner) = owner.parse() {
+                        result.push(owner)
+                    }
+                    result
+                });
+                paths.push((Pattern::new(path).unwrap(), owners))
+            }
+            paths
+        });
+    // last match takes precedence
+    paths.reverse();
+    Owners { paths: paths }
 }
 
 
@@ -152,7 +212,7 @@ docs/*  docs@example.com
 
     #[test]
     fn from_reader_parses() {
-        let owners = Owners::from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader(EXAMPLE.as_bytes());
         assert_eq!(
             owners,
             Owners {
@@ -179,7 +239,7 @@ docs/*  docs@example.com
 
     #[test]
     fn owners_owns_wildcard() {
-        let owners = Owners::from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader(EXAMPLE.as_bytes());
         assert_eq!(
             owners.of("foo/bar.txt"),
             Some(&vec![Owner::Username("@defunkt".into())])
@@ -188,7 +248,7 @@ docs/*  docs@example.com
 
     #[test]
     fn owners_owns_last_match_wins() {
-        let owners = Owners::from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader(EXAMPLE.as_bytes());
         assert_eq!(
             owners.of("docs/foo.js"),
             Some(&vec![Owner::Email("docs@example.com".into())])
