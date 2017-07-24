@@ -1,6 +1,6 @@
 # codeowners
 
-> A Github [CODEOWNERS](https://help.github.com/articles/about-codeowners/) answersheet
+> A Github [CODEOWNERS](https://help.github.com/articles/about-codeowners/) answer sheet
 
 
 
