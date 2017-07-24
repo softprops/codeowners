@@ -4,4 +4,37 @@
 
 [Documentation](https://softprops.github.io/codeowners)
 
+## installation
+
+Add the following to your `Cargo.toml` filter
+
+```toml
+[dependencies]
+codeowners = "0.1"
+```
+
+## Usage
+
+Typical use involves resolving a CODEOWNERS file, parsing it, then querying target paths
+
+```rust
+extern crate codeowners;
+use std::env;
+
+fn main() {
+  if let (Some(owners_file), Some(path)) =
+     (env::args().nth(1), env::args().nth(2)) {
+     let owners = codeowners::from_path(owners_file);
+     match owners.of(&path) {
+       None => println!("{} is up for adoption", path),
+       Some(owners) => {
+          for owner in owners {
+            println!("{}", owner);
+          }
+       }
+     }
+  }
+}
+```
+
 Doug Tangren (softprops) 2017
