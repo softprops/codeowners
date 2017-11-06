@@ -1,6 +1,6 @@
 [package]
 name = "codeowners"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["softprops <d.tangren@gmail.com>"]
 description = "Rust bindings for Github CODEOWNERS files"
 readme = "README.md"
@@ -9,6 +9,13 @@ documentation = "https://softprops.github.io/codeowners"
 repository = "https://github.com/softprops/codeowners"
 license = "MIT"
 keywords = ["github", "owners"]
+
+[badges]
+travis-ci = { repository = "softprops/codeowners" }
+coveralls = { repository = "softprops/codeowners" }
+
+[dev-dependencies]
+pretty_assertions = "0.4"
 
 [dependencies]
 glob = "0.2"

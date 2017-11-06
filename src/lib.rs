@@ -1,9 +1,12 @@
-//! Codeowners provides interfaces for resolving owners of paths within code repositories using
-//! Github [CODEOWNERS](https://help.github.com/articles/about-codeowners/) files
+//! Codeowners provides interfaces for resolving owners of paths within code
+//! repositories using
+//! Github [CODEOWNERS](https://help.github.com/articles/about-codeowners/)
+//! files
 //!
 //! # Examples
 //!
-//! Typical use involves resolving a CODEOWNERS file, parsing it, then querying target paths
+//! Typical use involves resolving a CODEOWNERS file, parsing it,
+//! then querying target paths
 //!
 //! ```no_run
 //! extern crate codeowners;
@@ -26,6 +29,10 @@
 //! ```
 #![allow(missing_docs)]
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
 extern crate glob;
 #[macro_use]
 extern crate lazy_static;
@@ -35,8 +42,8 @@ use glob::Pattern;
 use regex::Regex;
 use std::fmt;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::{BufRead, Read};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -113,7 +120,12 @@ impl Owners {
             .iter()
             .filter_map(|mapping| {
                 let &(ref pattern, ref owners) = mapping;
-                if pattern.matches_path(path.as_ref()) {
+                let opts = glob::MatchOptions {
+                    case_sensitive: false,
+                    require_literal_separator: pattern.as_str().contains("/"),
+                    require_literal_leading_dot: false,
+                };
+                if pattern.matches_path_with(path.as_ref(), &opts) {
                     Some(owners)
                 } else {
                     None
@@ -166,6 +178,12 @@ where
 }
 
 /// Parse a CODEOWNERS file from some readable source
+/// This format is defined in
+/// [Github's documentation](https://help.github.com/articles/about-codeowners/)
+/// The syntax is uses gitgnore
+/// [patterns](https://www.kernel.org/pub/software/scm/git/docs/gitignore.html#_pattern_format)
+/// followed by an identifier for an owner. More information can be found
+/// [here](https://help.github.com/articles/about-codeowners/#codeowners-syntax)
 pub fn from_reader<R>(read: R) -> Owners
 where
     R: Read,
@@ -183,12 +201,7 @@ where
                     }
                     result
                 });
-                let normalized = if path.starts_with("*") {
-                    path.to_owned()
-                } else {
-                    format!("**/{}", path)
-                };
-                paths.push((Pattern::new(&normalized).unwrap(), owners))
+                paths.push((pattern(path), owners))
             }
             paths
         });
@@ -197,30 +210,73 @@ where
     Owners { paths: paths }
 }
 
+fn pattern(path: &str) -> Pattern {
+    // if pattern starts with anchor or explicit wild card, it should
+    // match any prefix
+    let prefixed = if path.starts_with("*") || path.starts_with("/") {
+        path.to_owned()
+    } else {
+        format!("**/{}", path)
+    };
+    // if pattern starts with anchor it should only match paths
+    // relative to root
+    let mut normalized = prefixed.trim_left_matches("/").to_string();
+    // if pattern ends with /, it should match children of that directory
+    if normalized.ends_with("/") {
+        normalized.push_str("**");
+    }
+    Pattern::new(&normalized).unwrap()
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    const EXAMPLE: &str = r"# Lines starting with '#' are comments.
+    const EXAMPLE: &str = r"# This is a comment.
 # Each line is a file pattern followed by one or more owners.
 
-# These owners will be the default owners for everything in the repo.
-*       @defunkt
+# These owners will be the default owners for everything in
+# the repo. Unless a later match takes precedence,
+# @global-owner1 and @global-owner2 will be requested for
+# review when someone opens a pull request.
+*       @global-owner1 @global-owner2
 
-# Order is important. The last matching pattern has the most precedence.
-# So if a pull request only touches javascript files, only these owners
-# will be requested to review.
-*.js    @octocat @github/js
+# Order is important; the last matching pattern takes the most
+# precedence. When someone opens a pull request that only
+# modifies JS files, only @js-owner and not the global
+# owner(s) will be requested for a review.
+*.js    @js-owner
 
-# You can also use email addresses if you prefer.
+# You can also use email addresses if you prefer. They'll be
+# used to look up users just like we do for commit author
+# emails.
+*.go docs@example.com
+
+# In this example, @doctocat owns any files in the build/logs
+# directory at the root of the repository and any of its
+# subdirectories.
+/build/logs/ @doctocat
+
+# The `docs/*` pattern will match files like
+# `docs/getting-started.md` but not further nested files like
+# `docs/build-app/troubleshooting.md`.
 docs/*  docs@example.com
+
+# In this example, @octocat owns any file in an apps directory
+# anywhere in your repository.
+apps/ @octocat
+
+# In this example, @doctocat owns any file in the `/docs`
+# directory in the root of your repository.
+/docs/ @doctocat
 ";
 
     #[test]
     fn owner_parses() {
         assert!("@user".parse() == Ok(Owner::Username("@user".into())));
         assert!("@org/team".parse() == Ok(Owner::Team("@org/team".into())));
-        assert!("user@domain.com".parse() == Ok(Owner::Email("user@domain.com".into())));
+        assert!(
+            "user@domain.com".parse() == Ok(Owner::Email("user@domain.com".into()))
+        );
         assert!("bogus".parse::<Owner>() == Err("not an owner".into()));
     }
 
@@ -228,7 +284,9 @@ docs/*  docs@example.com
     fn owner_displays() {
         assert!(Owner::Username("@user".into()).to_string() == "@user");
         assert!(Owner::Team("@org/team".into()).to_string() == "@org/team");
-        assert!(Owner::Email("user@domain.com".into()).to_string() == "user@domain.com");
+        assert!(
+            Owner::Email("user@domain.com".into()).to_string() == "user@domain.com"
+        );
     }
 
     #[test]
@@ -239,19 +297,35 @@ docs/*  docs@example.com
             Owners {
                 paths: vec![
                     (
+                        Pattern::new("docs/**").unwrap(),
+                        vec![Owner::Username("@doctocat".into())]
+                    ),
+                    (
+                        Pattern::new("**/apps/**").unwrap(),
+                        vec![Owner::Username("@octocat".into())]
+                    ),
+                    (
                         Pattern::new("**/docs/*").unwrap(),
                         vec![Owner::Email("docs@example.com".into())]
                     ),
                     (
+                        Pattern::new("build/logs/**").unwrap(),
+                        vec![Owner::Username("@doctocat".into())]
+                    ),
+                    (
+                        Pattern::new("*.go").unwrap(),
+                        vec![Owner::Email("docs@example.com".into())]
+                    ),
+                    (
                         Pattern::new("*.js").unwrap(),
-                        vec![
-                            Owner::Username("@octocat".into()),
-                            Owner::Team("@github/js".into()),
-                        ]
+                        vec![Owner::Username("@js-owner".into())]
                     ),
                     (
                         Pattern::new("*").unwrap(),
-                        vec![Owner::Username("@defunkt".into())]
+                        vec![
+                            Owner::Username("@global-owner1".into()),
+                            Owner::Username("@global-owner2".into()),
+                        ]
                     ),
                 ],
             }
@@ -262,26 +336,102 @@ docs/*  docs@example.com
     fn owners_owns_wildcard() {
         let owners = from_reader(EXAMPLE.as_bytes());
         assert_eq!(
+            owners.of("foo.txt"),
+            Some(&vec![
+                Owner::Username("@global-owner1".into()),
+                Owner::Username("@global-owner2".into()),
+            ])
+        );
+        assert_eq!(
             owners.of("foo/bar.txt"),
-            Some(&vec![Owner::Username("@defunkt".into())])
+            Some(&vec![
+                Owner::Username("@global-owner1".into()),
+                Owner::Username("@global-owner2".into()),
+            ])
         )
     }
 
     #[test]
-    fn owners_owns_last_match_wins() {
+    fn owners_owns_js_extention() {
         let owners = from_reader(EXAMPLE.as_bytes());
         assert_eq!(
-            owners.of("docs/foo.js"),
+            owners.of("foo.js"),
+            Some(&vec![Owner::Username("@js-owner".into())])
+        );
+        assert_eq!(
+            owners.of("foo/bar.js"),
+            Some(&vec![Owner::Username("@js-owner".into())])
+        )
+    }
+
+    #[test]
+    fn owners_owns_go_extention() {
+        let owners = from_reader(EXAMPLE.as_bytes());
+        assert_eq!(
+            owners.of("foo.go"),
+            Some(&vec![Owner::Email("docs@example.com".into())])
+        );
+        assert_eq!(
+            owners.of("foo/bar.go"),
             Some(&vec![Owner::Email("docs@example.com".into())])
         )
     }
 
     #[test]
-    fn base_is_implied() {
+    fn owners_owns_anchored_build_logs() {
         let owners = from_reader(EXAMPLE.as_bytes());
+        // relative to root
+        assert_eq!(
+            owners.of("build/logs/foo.go"),
+            Some(&vec![Owner::Username("@doctocat".into())])
+        );
+        assert_eq!(
+            owners.of("build/logs/foo/bar.go"),
+            Some(&vec![Owner::Username("@doctocat".into())])
+        );
+        // not relative to root
+        assert_eq!(
+            owners.of("foo/build/logs/foo.go"),
+            Some(&vec![Owner::Email("docs@example.com".into())])
+        )
+    }
+
+    #[test]
+    fn owners_owns_unanchored_docs() {
+        let owners = from_reader(EXAMPLE.as_bytes());
+        // docs anywhere
         assert_eq!(
             owners.of("foo/docs/foo.js"),
             Some(&vec![Owner::Email("docs@example.com".into())])
+        );
+        assert_eq!(
+            owners.of("foo/bar/docs/foo.js"),
+            Some(&vec![Owner::Email("docs@example.com".into())])
+        );
+        // but not nested
+        assert_eq!(
+            owners.of("foo/bar/docs/foo/foo.js"),
+            Some(&vec![Owner::Username("@js-owner".into())])
         )
     }
+
+    #[test]
+    fn owners_owns_unanchored_apps() {
+        let owners = from_reader(EXAMPLE.as_bytes());
+        assert_eq!(
+            owners.of("foo/apps/foo.js"),
+            Some(&vec![Owner::Username("@octocat".into())])
+        )
+    }
+
+    #[test]
+    fn owners_owns_anchored_docs() {
+        let owners = from_reader(EXAMPLE.as_bytes());
+        // relative to root
+        assert_eq!(
+            owners.of("docs/foo.js"),
+            Some(&vec![Owner::Username("@doctocat".into())])
+        )
+    }
+
 }
