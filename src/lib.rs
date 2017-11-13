@@ -128,6 +128,22 @@ impl Owners {
                 if pattern.matches_path_with(path.as_ref(), &opts) {
                     Some(owners)
                 } else {
+                    // this pattern is only meant to match
+                    // direct children
+                    if pattern.as_str().ends_with("/*") {
+                        return None;
+                    }
+                    // case of implied owned children
+                    // foo/bar @owner should indicate that foo/bar/baz.rs is
+                    // owned by @owner
+                    let mut p = path.as_ref();
+                    while let Some(parent) = p.parent() {
+                        if pattern.matches_path_with(parent.as_ref(), &opts) {
+                            return Some(owners);
+                        } else {
+                            ::std::mem::replace(&mut p, parent);
+                        }
+                    }
                     None
                 }
             })
@@ -431,6 +447,15 @@ apps/ @octocat
         assert_eq!(
             owners.of("docs/foo.js"),
             Some(&vec![Owner::Username("@doctocat".into())])
+        )
+    }
+
+    #[test]
+    fn implied_children_owners() {
+        let owners = from_reader("foo/bar @doug".as_bytes());
+        assert_eq!(
+            owners.of("foo/bar/baz.rs"),
+            Some(&vec![Owner::Username("@doug".into())])
         )
     }
 
