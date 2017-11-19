@@ -141,7 +141,7 @@ impl Owners {
                         if pattern.matches_path_with(parent.as_ref(), &opts) {
                             return Some(owners);
                         } else {
-                            ::std::mem::replace(&mut p, parent);
+                            p = parent;
                         }
                     }
                     None
