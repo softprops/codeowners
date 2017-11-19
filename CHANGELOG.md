@@ -1,3 +1,7 @@
+# 0.1.3
+
+* improved match handing of patterns on implied children, if parents match
+
 # 0.1.2
 
 * improved match handling of pattern syntax
