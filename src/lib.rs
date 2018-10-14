@@ -144,7 +144,7 @@ impl Owners {
                     // owned by @owner
                     let mut p = path.as_ref();
                     while let Some(parent) = p.parent() {
-                        if pattern.matches_path_with(parent.as_ref(), &opts) {
+                        if pattern.matches_path_with(parent, &opts) {
                             return Some(owners);
                         } else {
                             p = parent;
