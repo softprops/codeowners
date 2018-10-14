@@ -42,8 +42,8 @@ use glob::Pattern;
 use regex::Regex;
 use std::fmt;
 use std::fs::File;
-use std::io::{BufRead, Read};
 use std::io::BufReader;
+use std::io::{BufRead, Read};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -73,11 +73,14 @@ pub enum Owner {
 }
 
 impl fmt::Display for Owner {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let inner = match self {
-            &Owner::Username(ref u) => u,
-            &Owner::Team(ref t) => t,
-            &Owner::Email(ref e) => e,
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter,
+    ) -> fmt::Result {
+        let inner = match *self {
+            Owner::Username(ref u) => u,
+            Owner::Team(ref t) => t,
+            Owner::Email(ref e) => e,
         };
         f.write_str(inner.as_str())
     }
@@ -112,7 +115,10 @@ pub struct Owners {
 
 impl Owners {
     /// Resolve a list of owners matching a given path
-    pub fn of<P>(&self, path: P) -> Option<&Vec<Owner>>
+    pub fn of<P>(
+        &self,
+        path: P,
+    ) -> Option<&Vec<Owner>>
     where
         P: AsRef<Path>,
     {
@@ -122,7 +128,7 @@ impl Owners {
                 let &(ref pattern, ref owners) = mapping;
                 let opts = glob::MatchOptions {
                     case_sensitive: false,
-                    require_literal_separator: pattern.as_str().contains("/"),
+                    require_literal_separator: pattern.as_str().contains('/'),
                     require_literal_leading_dot: false,
                 };
                 if pattern.matches_path_with(path.as_ref(), &opts) {
@@ -223,22 +229,22 @@ where
         });
     // last match takes precedence
     paths.reverse();
-    Owners { paths: paths }
+    Owners { paths }
 }
 
 fn pattern(path: &str) -> Pattern {
     // if pattern starts with anchor or explicit wild card, it should
     // match any prefix
-    let prefixed = if path.starts_with("*") || path.starts_with("/") {
+    let prefixed = if path.starts_with('*') || path.starts_with('/') {
         path.to_owned()
     } else {
         format!("**/{}", path)
     };
     // if pattern starts with anchor it should only match paths
     // relative to root
-    let mut normalized = prefixed.trim_left_matches("/").to_string();
+    let mut normalized = prefixed.trim_left_matches('/').to_string();
     // if pattern ends with /, it should match children of that directory
-    if normalized.ends_with("/") {
+    if normalized.ends_with('/') {
         normalized.push_str("**");
     }
     Pattern::new(&normalized).unwrap()
@@ -290,9 +296,7 @@ apps/ @octocat
     fn owner_parses() {
         assert!("@user".parse() == Ok(Owner::Username("@user".into())));
         assert!("@org/team".parse() == Ok(Owner::Team("@org/team".into())));
-        assert!(
-            "user@domain.com".parse() == Ok(Owner::Email("user@domain.com".into()))
-        );
+        assert!("user@domain.com".parse() == Ok(Owner::Email("user@domain.com".into())));
         assert!("bogus".parse::<Owner>() == Err("not an owner".into()));
     }
 
@@ -300,9 +304,7 @@ apps/ @octocat
     fn owner_displays() {
         assert!(Owner::Username("@user".into()).to_string() == "@user");
         assert!(Owner::Team("@org/team".into()).to_string() == "@org/team");
-        assert!(
-            Owner::Email("user@domain.com".into()).to_string() == "user@domain.com"
-        );
+        assert!(Owner::Email("user@domain.com".into()).to_string() == "user@domain.com");
     }
 
     #[test]
