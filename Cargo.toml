@@ -8,7 +8,7 @@ homepage = "https://github.com/softprops/codeowners"
 documentation = "https://softprops.github.io/codeowners"
 repository = "https://github.com/softprops/codeowners"
 license = "MIT"
-keywords = ["github", "owners"]
+keywords = ["github", "owners", "ownership"]
 
 [badges]
 travis-ci = { repository = "softprops/codeowners" }
@@ -19,5 +19,5 @@ pretty_assertions = "0.4"
 
 [dependencies]
 glob = "0.2"
-regex = "0.2"
-lazy_static = "0.2"
+regex = "1.0"
+lazy_static = "1.1"
