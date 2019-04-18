@@ -196,7 +196,7 @@ pub fn from_path<P>(path: P) -> Owners
 where
     P: AsRef<Path>,
 {
-    ::from_reader(File::open(path).unwrap())
+    crate::from_reader(File::open(path).unwrap())
 }
 
 /// Parse a CODEOWNERS file from some readable source
@@ -242,7 +242,7 @@ fn pattern(path: &str) -> Pattern {
     };
     // if pattern starts with anchor it should only match paths
     // relative to root
-    let mut normalized = prefixed.trim_left_matches('/').to_string();
+    let mut normalized = prefixed.trim_start_matches('/').to_string();
     // if pattern ends with /, it should match children of that directory
     if normalized.ends_with('/') {
         normalized.push_str("**");
