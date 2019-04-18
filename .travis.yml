@@ -7,37 +7,15 @@ language: rust
 # https://docs.travis-ci.com/user/pull-requests/#how-pull-requests-are-built
 branches:
   only:
+  # release tags
+  - /^v\d+\.\d+\.\d+.*$/
   - master
-
-matrix:
-  fast_finish: true
-  include:
-  - rust: nightly
-  - rust: beta
-  - rust: stable
-
-install: |
-  # should only be necessary until rustfmt produces consistent results in stable/nightly
-  # see also https://github.com/xd009642/tarpaulin/issues/150 for tarpaulin nightly dependency
-  if [[ "$TRAVIS_RUST_VERSION" == nightly ]]; then
-    `RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install --force cargo-tarpaulin`
-    rustup component add rustfmt-preview --toolchain nightly
-  fi
-
-script:
-- |
-  if [[ "$TRAVIS_RUST_VERSION" == nightly ]]; then
-    cargo fmt --all -- --check
-  fi
-- cargo test
 
 # Cache `cargo install`ed tools, but don't cache the project's `target`
 # directory (which ends up over-caching and filling all disk space!)
-# https://levans.fr/rust_travis_cache.html
 cache:
   directories:
     - /home/travis/.cargo
-
 
 before_cache:
   # But don't cache the cargo registry
@@ -45,16 +23,76 @@ before_cache:
   # Travis can't cache files that are not readable by "others"
   - chmod -R a+r $HOME/.cargo
 
+# yaml ref for deploying release binary to github
+DEPLOY_TO_GITHUB: &DEPLOY_TO_GITHUB
+  before_deploy:
+    - name="codeowners-$TRAVIS_TAG-$OS-$ARCH"
+    - src=$(pwd)
+    - mkdir $name
+    - strip target/$TARGET/release/codeowners
+    - cp target/$TARGET/release/codeowners $name/
+    - cd $name
+    - tar czvf $src/$name.tar.gz *
+    - cd $src
+    - rm -rf $name
+  deploy:
+    provider: releases
+    api_key: $GH_TOKEN
+    file: codeowners-$TRAVIS_TAG-$OS-$ARCH.tar.gz
+    skip_cleanup: true
+    on:
+      tags: true
+
+install: |
+  if [ "$TRAVIS_RUST_VERSION" == nightly ] && [ $TRAVIS_BRANCH = master ]; then
+    RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin -f
+  fi
+
+matrix:
+  include:
+
+  - name: Unit Tests
+    env: RUST_BACKTRACE=1
+    rust: nightly
+    script:
+    - cargo test --locked
+    - rustup component add rustfmt
+    - cargo fmt --version
+    - cargo fmt --all -- --check
+
+  - name: Linux Binary
+    env: TARGET=x86_64-unknown-linux-musl OS=Linux ARCH=x86_64
+    rust: stable
+    before_script:
+      - rustup target add $TARGET
+    script: cargo build --release --target $TARGET --locked
+    addons:
+      apt:
+        packages:
+          - musl-tools
+    <<: *DEPLOY_TO_GITHUB
+
+  - name: macOS Binary
+    env: MACOSX_DEPLOYMENT_TARGET=10.7 TARGET=x86_64-apple-darwin OS=Darwin ARCH=x86_64
+    os: osx
+    rust: stable
+    script: cargo build --release --target $TARGET --locked
+    install: true
+    <<: *DEPLOY_TO_GITHUB
+
 addons:
   apt:
     packages:
+    - musl-tools
+    # required by tarpaulin code coverage tool
     - libssl-dev
 
 after_success:
-  - '[ $TRAVIS_EVENT_TYPE != "cron" ] &&
-    [ $TRAVIS_RUST_VERSION = nightly ] &&
-    [ $TRAVIS_BRANCH = master ] &&
-    [ $TRAVIS_PULL_REQUEST = false ] &&
+  # report coverage to coveralls
+  # see https://github.com/xd009642/tarpaulin for more information
+  - '[ $TRAVIS_RUST_VERSION = nightly ] &&
+     [ $TRAVIS_BRANCH = master ] &&
+     [ $TRAVIS_PULL_REQUEST = false ] &&
      cargo tarpaulin --ciserver travis-ci --coveralls $TRAVIS_JOB_ID || true'
   - '[ $TRAVIS_RUST_VERSION = stable ] &&
     [ $TRAVIS_BRANCH = master ] &&
