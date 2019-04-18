@@ -18,7 +18,6 @@ codeowners = "0.1"
 Typical use involves resolving a CODEOWNERS file, parsing it, then querying target paths
 
 ```rust
-extern crate codeowners;
 use std::env;
 
 fn main() {
