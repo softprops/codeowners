@@ -33,19 +33,16 @@
 #[macro_use]
 extern crate pretty_assertions;
 
-extern crate glob;
-#[macro_use]
-extern crate lazy_static;
-extern crate regex;
-
 use glob::Pattern;
+use lazy_static::lazy_static;
 use regex::Regex;
-use std::fmt;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::{BufRead, Read};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    fmt,
+    fs::File,
+    io::{BufRead, BufReader, Read},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 const CODEOWNERS: &str = "CODEOWNERS";
 

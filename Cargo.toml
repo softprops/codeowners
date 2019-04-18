@@ -9,6 +9,7 @@ documentation = "https://softprops.github.io/codeowners"
 repository = "https://github.com/softprops/codeowners"
 license = "MIT"
 keywords = ["github", "owners", "ownership"]
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "softprops/codeowners" }
