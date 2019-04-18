@@ -55,7 +55,7 @@ matrix:
     env: RUST_BACKTRACE=1
     rust: nightly
     script:
-    - cargo test --locked
+    - cargo test
     - rustup component add rustfmt
     - cargo fmt --version
     - cargo fmt --all -- --check
@@ -65,7 +65,7 @@ matrix:
     rust: stable
     before_script:
       - rustup target add $TARGET
-    script: cargo build --release --target $TARGET --locked
+    script: cargo build --release --target $TARGET
     addons:
       apt:
         packages:
@@ -76,7 +76,7 @@ matrix:
     env: MACOSX_DEPLOYMENT_TARGET=10.7 TARGET=x86_64-apple-darwin OS=Darwin ARCH=x86_64
     os: osx
     rust: stable
-    script: cargo build --release --target $TARGET --locked
+    script: cargo build --release --target $TARGET
     install: true
     <<: *DEPLOY_TO_GITHUB
 
