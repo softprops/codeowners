@@ -36,4 +36,4 @@ fn main() {
 }
 ```
 
-Doug Tangren (softprops) 2017
+Doug Tangren (softprops) 2017-2019
