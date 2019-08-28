@@ -128,7 +128,7 @@ impl Owners {
                     require_literal_separator: pattern.as_str().contains('/'),
                     require_literal_leading_dot: false,
                 };
-                if pattern.matches_path_with(path.as_ref(), &opts) {
+                if pattern.matches_path_with(path.as_ref(), opts) {
                     Some(owners)
                 } else {
                     // this pattern is only meant to match
@@ -141,7 +141,7 @@ impl Owners {
                     // owned by @owner
                     let mut p = path.as_ref();
                     while let Some(parent) = p.parent() {
-                        if pattern.matches_path_with(parent, &opts) {
+                        if pattern.matches_path_with(parent, opts) {
                             return Some(owners);
                         } else {
                             p = parent;
