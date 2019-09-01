@@ -9,7 +9,6 @@
 //! then querying target paths
 //!
 //! ```no_run
-//! extern crate codeowners;
 //! use std::env;
 //!
 //! fn main() {
@@ -112,6 +111,12 @@ pub struct Owners {
 }
 
 impl Owners {
+    /// Path location of where this instance was loaded from.
+    /// This may return `-` in cases where not loaded directly from a file
+    pub fn location(&self) -> &str {
+        self.location.as_str()
+    }
+
     /// Resolve a list of owners matching a given path
     pub fn of<P>(
         &self,
