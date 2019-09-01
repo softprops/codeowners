@@ -45,7 +45,12 @@ DEPLOY_TO_GITHUB: &DEPLOY_TO_GITHUB
 
 install: |
   if [ "$TRAVIS_RUST_VERSION" == nightly ] && [ $TRAVIS_BRANCH = master ]; then
-    RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin -f
+    cargo install cargo-update || echo "cargo-update already installed"
+    RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin || echo "cargo-tarpaulin already installed"
+    cargo install-update -a
+
+    # should only be necessary until rustfmt produces consistent results in stable/nightly
+    rustup component add rustfmt
   fi
 
 matrix:
