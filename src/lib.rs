@@ -104,10 +104,11 @@ impl FromStr for Owner {
     }
 }
 
-/// Mappings of owners to path patterns
+/// Pasrsed result of a GitHub `CODEOWNERS` file
 #[derive(Debug, PartialEq)]
 pub struct Owners {
-    paths: Vec<(Pattern, Vec<Owner>)>,
+    location: String,
+    paths: Vec<(usize, Pattern, Vec<Owner>)>,
 }
 
 impl Owners {
@@ -122,7 +123,7 @@ impl Owners {
         self.paths
             .iter()
             .filter_map(|mapping| {
-                let &(ref pattern, ref owners) = mapping;
+                let &(_, ref pattern, ref owners) = mapping;
                 let opts = glob::MatchOptions {
                     case_sensitive: false,
                     require_literal_separator: pattern.as_str().contains('/'),
@@ -193,7 +194,10 @@ pub fn from_path<P>(path: P) -> Owners
 where
     P: AsRef<Path>,
 {
-    crate::from_reader(File::open(path).unwrap())
+    crate::from_reader(
+        path.as_ref().display().to_string(),
+        File::open(path).unwrap(),
+    )
 }
 
 /// Parse a CODEOWNERS file from some readable source
@@ -203,15 +207,20 @@ where
 /// [patterns](https://www.kernel.org/pub/software/scm/git/docs/gitignore.html#_pattern_format)
 /// followed by an identifier for an owner. More information can be found
 /// [here](https://help.github.com/articles/about-codeowners/#codeowners-syntax)
-pub fn from_reader<R>(read: R) -> Owners
+pub fn from_reader<L, R>(
+    location: L,
+    read: R,
+) -> Owners
 where
+    L: AsRef<str>,
     R: Read,
 {
     let mut paths = BufReader::new(read)
         .lines()
         .filter_map(Result::ok)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .fold(Vec::new(), |mut paths, line| {
+        .enumerate()
+        .filter(|(_, line)| !line.is_empty() && !line.starts_with('#'))
+        .fold(Vec::new(), |mut paths, (idx, line)| {
             let mut elements = line.split_whitespace();
             if let Some(path) = elements.next() {
                 let owners = elements.fold(Vec::new(), |mut result, owner| {
@@ -220,13 +229,15 @@ where
                     }
                     result
                 });
-                paths.push((pattern(path), owners))
+                let line_number = idx + 1;
+                paths.push((line_number, pattern(path), owners))
             }
             paths
         });
     // last match takes precedence
     paths.reverse();
-    Owners { paths }
+    let location = location.as_ref().into();
+    Owners { location, paths }
 }
 
 fn pattern(path: &str) -> Pattern {
@@ -250,44 +261,7 @@ fn pattern(path: &str) -> Pattern {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const EXAMPLE: &str = r"# This is a comment.
-# Each line is a file pattern followed by one or more owners.
-
-# These owners will be the default owners for everything in
-# the repo. Unless a later match takes precedence,
-# @global-owner1 and @global-owner2 will be requested for
-# review when someone opens a pull request.
-*       @global-owner1 @global-owner2
-
-# Order is important; the last matching pattern takes the most
-# precedence. When someone opens a pull request that only
-# modifies JS files, only @js-owner and not the global
-# owner(s) will be requested for a review.
-*.js    @js-owner
-
-# You can also use email addresses if you prefer. They'll be
-# used to look up users just like we do for commit author
-# emails.
-*.go docs@example.com
-
-# In this example, @doctocat owns any files in the build/logs
-# directory at the root of the repository and any of its
-# subdirectories.
-/build/logs/ @doctocat
-
-# The `docs/*` pattern will match files like
-# `docs/getting-started.md` but not further nested files like
-# `docs/build-app/troubleshooting.md`.
-docs/*  docs@example.com
-
-# In this example, @octocat owns any file in an apps directory
-# anywhere in your repository.
-apps/ @octocat
-
-# In this example, @doctocat owns any file in the `/docs`
-# directory in the root of your repository.
-/docs/ @doctocat
-";
+    const EXAMPLE: &str = include_str!("../tests/data/CODEOWNERS");
 
     #[test]
     fn owner_parses() {
@@ -306,36 +280,44 @@ apps/ @octocat
 
     #[test]
     fn from_reader_parses() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         assert_eq!(
             owners,
             Owners {
+                location: "-".into(),
                 paths: vec![
                     (
+                        37,
                         Pattern::new("docs/**").unwrap(),
                         vec![Owner::Username("@doctocat".into())]
                     ),
                     (
+                        33,
                         Pattern::new("**/apps/**").unwrap(),
                         vec![Owner::Username("@octocat".into())]
                     ),
                     (
+                        29,
                         Pattern::new("**/docs/*").unwrap(),
                         vec![Owner::Email("docs@example.com".into())]
                     ),
                     (
+                        24,
                         Pattern::new("build/logs/**").unwrap(),
                         vec![Owner::Username("@doctocat".into())]
                     ),
                     (
+                        19,
                         Pattern::new("*.go").unwrap(),
                         vec![Owner::Email("docs@example.com".into())]
                     ),
                     (
+                        14,
                         Pattern::new("*.js").unwrap(),
                         vec![Owner::Username("@js-owner".into())]
                     ),
                     (
+                        8,
                         Pattern::new("*").unwrap(),
                         vec![
                             Owner::Username("@global-owner1".into()),
@@ -349,7 +331,7 @@ apps/ @octocat
 
     #[test]
     fn owners_owns_wildcard() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         assert_eq!(
             owners.of("foo.txt"),
             Some(&vec![
@@ -368,7 +350,7 @@ apps/ @octocat
 
     #[test]
     fn owners_owns_js_extention() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         assert_eq!(
             owners.of("foo.js"),
             Some(&vec![Owner::Username("@js-owner".into())])
@@ -381,7 +363,7 @@ apps/ @octocat
 
     #[test]
     fn owners_owns_go_extention() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         assert_eq!(
             owners.of("foo.go"),
             Some(&vec![Owner::Email("docs@example.com".into())])
@@ -394,7 +376,7 @@ apps/ @octocat
 
     #[test]
     fn owners_owns_anchored_build_logs() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         // relative to root
         assert_eq!(
             owners.of("build/logs/foo.go"),
@@ -413,7 +395,7 @@ apps/ @octocat
 
     #[test]
     fn owners_owns_unanchored_docs() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         // docs anywhere
         assert_eq!(
             owners.of("foo/docs/foo.js"),
@@ -432,7 +414,7 @@ apps/ @octocat
 
     #[test]
     fn owners_owns_unanchored_apps() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         assert_eq!(
             owners.of("foo/apps/foo.js"),
             Some(&vec![Owner::Username("@octocat".into())])
@@ -441,7 +423,7 @@ apps/ @octocat
 
     #[test]
     fn owners_owns_anchored_docs() {
-        let owners = from_reader(EXAMPLE.as_bytes());
+        let owners = from_reader("-", EXAMPLE.as_bytes());
         // relative to root
         assert_eq!(
             owners.of("docs/foo.js"),
@@ -451,11 +433,10 @@ apps/ @octocat
 
     #[test]
     fn implied_children_owners() {
-        let owners = from_reader("foo/bar @doug".as_bytes());
+        let owners = from_reader("-", "foo/bar @doug".as_bytes());
         assert_eq!(
             owners.of("foo/bar/baz.rs"),
             Some(&vec![Owner::Username("@doug".into())])
         )
     }
-
 }
