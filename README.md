@@ -2,7 +2,7 @@
 
 > A Github [CODEOWNERS](https://help.github.com/articles/about-codeowners/) answer sheet
 
-[Documentation](https://softprops.github.io/codeowners)
+[Documentation](https://docs.rs/codeowners)
 
 ## installation
 
